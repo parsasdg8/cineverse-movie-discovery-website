@@ -277,13 +277,23 @@ Client-side storage
 Interactive components
 
 The main goal was to combine these concepts into a complete movie discovery experience rather than a simple static movie page.
+</div> 
+```
+
 
 👨‍💻 Creator
 <div align="center">
 Parsa Sadeghi
-<a href="https://github.com/parsasdg8"> <img src="https://img.shields.io/badge/GitHub-parsasdg8-181717?style=for-the-badge&logo=github" alt="GitHub"> </a> <a href="https://www.linkedin.com/in/parsa-sadeghi-141a0b389?utm_source=share_via&utm_content=profile&utm_medium=member_android"> <img src="https://img.shields.io/badge/LinkedIn-Parsa%20Sadeghi-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"> </a> </div>
+
+  
+<a href="https://github.com/parsasdg8"> <img src="https://img.shields.io/badge/GitHub-parsasdg8-181717?style=for-the-badge&logo=github" alt="GitHub"> </a>
+
+
+<a href="https://www.linkedin.com/in/parsa-sadeghi-141a0b389?utm_source=share_via&utm_content=profile&utm_medium=member_android"> <img src="https://img.shields.io/badge/LinkedIn-Parsa%20Sadeghi-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"> </a> 
+</div>
+
+
 <div align="center">
-
 ⭐ If you found this project interesting, consider giving it a star.
+</div>
 
-</div> ```
