@@ -44,9 +44,9 @@
 
 برای مشاهده پروژه می‌توانید از لینک زیر استفاده کنید:
 
-### 👉 [مشاهده CineVerse](https://cineverse-demo.netlify.app/)
-
 (اگر ip شما ایران است باید از vpn برای دیدن دموی انلاین پروژه استفاده کنید)
+
+### 👉 [مشاهده CineVerse](https://cineverse-demo.netlify.app/)
 ---
 
 ## ✨ امکانات
