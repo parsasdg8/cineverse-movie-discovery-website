@@ -1,10 +1,11 @@
-const API = "https://moviesapi.ir/api/v1/movies?page=";
-const TOTAL_PAGES = 5;
+const API = "/api/movies?page=";
+const TOTAL_PAGES = 25;
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
 
 const CORS_PROXIES = [
     (url) =>
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    (url) => url,
 ];
 
 let allMovies = [];
@@ -16,10 +17,18 @@ let carouselCardsPerView = 5;
 
 
 /* =========================================================
+/* =========================================================
    DOM
+========================================================= */
 ========================================================= */
 
 const loader = document.getElementById("loader");
+
+const loadingText =
+    document.getElementById("loadingText");
+
+const loadingProgress =
+    document.getElementById("loadingProgress");
 
 const loadingText =
     document.getElementById("loadingText");
@@ -35,7 +44,20 @@ const searchResults =
 
 const searchWrapper =
     document.getElementById("searchWrapper");
+const searchInput =
+    document.getElementById("searchInput");
 
+const searchResults =
+    document.getElementById("searchResults");
+
+const searchWrapper =
+    document.getElementById("searchWrapper");
+
+const mobileSearchButton =
+    document.getElementById("mobileSearchButton");
+
+const mobileSearchClose =
+    document.getElementById("mobileSearchClose");
 const mobileSearchButton =
     document.getElementById("mobileSearchButton");
 
@@ -47,7 +69,17 @@ const bestCarousel =
 
 const recommendedMovie =
     document.getElementById("recommendedMovie");
+const bestCarousel =
+    document.getElementById("bestCarousel");
 
+const recommendedMovie =
+    document.getElementById("recommendedMovie");
+
+const allMoviesContainer =
+    document.getElementById("allMovies");
+
+const movieCount =
+    document.getElementById("movieCount");
 const allMoviesContainer =
     document.getElementById("allMovies");
 
@@ -62,13 +94,34 @@ const nextPageBtn =
 
 const pageNumbers =
     document.getElementById("pageNumbers");
+const prevPageBtn =
+    document.getElementById("prevPage");
+
+const nextPageBtn =
+    document.getElementById("nextPage");
+
+const pageNumbers =
+    document.getElementById("pageNumbers");
 
 const bestPrevBtn =
     document.getElementById("bestPrev");
 
 const bestNextBtn =
     document.getElementById("bestNext");
+const bestPrevBtn =
+    document.getElementById("bestPrev");
 
+const bestNextBtn =
+    document.getElementById("bestNext");
+
+const modal =
+    document.getElementById("movieModal");
+
+const modalBody =
+    document.getElementById("modalBody");
+
+const modalClose =
+    document.getElementById("modalClose");
 const modal =
     document.getElementById("movieModal");
 
@@ -87,13 +140,27 @@ document.body.classList.add("loading");
 
 
 /* =========================================================
+/* =========================================================
+   INITIAL LOADING STATE
+========================================================= */
+
+document.body.classList.add("loading");
+
+
+/* =========================================================
    HELPERS
+========================================================= */
 ========================================================= */
 
 function imageURL(url) {
 
+
     if (!url) return "";
 
+    if (
+        location.protocol === "https:" &&
+        url.startsWith("http:")
+    ) {
     if (
         location.protocol === "https:" &&
         url.startsWith("http:")
@@ -106,6 +173,7 @@ function imageURL(url) {
 
 
 function escapeHTML(value = "") {
+
 
     return String(value)
         .replaceAll("&", "&amp;")
@@ -124,20 +192,30 @@ function getRating(movie) {
     return Number.isFinite(rating)
         ? rating
         : 0;
+
+    const rating =
+        parseFloat(movie?.imdb_rating);
+
+    return Number.isFinite(rating)
+        ? rating
+        : 0;
 }
 
 
 function debounce(fn, wait) {
 
+
     let timeout;
 
     return (...args) => {
+
 
         clearTimeout(timeout);
 
         timeout = setTimeout(() => {
             fn(...args);
         }, wait);
+
 
     };
 }
@@ -174,11 +252,48 @@ function hideLoader() {
 
 
 /* =========================================================
+/* =========================================================
+   LOADER CONTROL
+========================================================= */
+
+function hideLoader() {
+
+    if (!loader) {
+        document.body.classList.remove("loading");
+        return;
+    }
+
+    /*
+       اول Loader را Fade Out می‌کنیم.
+       محتوا از همان ابتدا پشت Loader وجود دارد.
+    */
+    loader.classList.add("hidden");
+
+    /*
+       بعد از تمام شدن Fade،
+       محدودیت اسکرول Body را برمی‌داریم.
+    */
+    setTimeout(() => {
+
+        document.body.classList.remove("loading");
+
+    }, 550);
+
+}
+
+
+/* =========================================================
    API
+========================================================= */
 ========================================================= */
 
 async function fetchPage(page) {
 
+    const cacheKey =
+        `neonflix-page-${page}`;
+
+    const cached =
+        localStorage.getItem(cacheKey);
     const cacheKey =
         `neonflix-page-${page}`;
 
@@ -191,7 +306,13 @@ async function fetchPage(page) {
 
             const parsed =
                 JSON.parse(cached);
+            const parsed =
+                JSON.parse(cached);
 
+            if (
+                parsed.expires &&
+                parsed.expires > Date.now()
+            ) {
             if (
                 parsed.expires &&
                 parsed.expires > Date.now()
@@ -207,8 +328,12 @@ async function fetchPage(page) {
 
         }
 
+
     }
 
+
+    const targetUrl =
+        `${API}${page}`;
 
     const targetUrl =
         `${API}${page}`;
@@ -217,37 +342,39 @@ async function fetchPage(page) {
     let lastError = null;
 
 
-   for (const buildUrl of CORS_PROXIES) {
+    for (const buildUrl of CORS_PROXIES) {
 
     try {
 
-        const response =
-            await fetch(
-                buildUrl(targetUrl)
-            );
+            const controller =
+                new AbortController();
+
+            const timeout =
+                setTimeout(() => {
+                    controller.abort();
+                }, 10000);
 
 
-        if (!response.ok) {
+            const response =
+                await fetch(
+                    buildUrl(targetUrl),
+                    {
+                        signal: controller.signal
+                    }
+                );
 
-            throw new Error(
-                `API Error: ${response.status}`
-            );
 
-        }
+            clearTimeout(timeout);
 
 
-        json =
-            await response.json();
+            if (!response.ok) {
 
-        break;
+                throw new Error(
+                    `API Error: ${response.status}`
+                );
 
-    } catch (error) {
+            }
 
-        lastError = error;
-
-    }
-
-}
 
             json =
                 await response.json();
@@ -260,7 +387,9 @@ async function fetchPage(page) {
 
         }
 
+
     }
+
 
 
     if (!json) {
@@ -270,7 +399,14 @@ async function fetchPage(page) {
             new Error("Failed to fetch movies.")
         );
 
+
+        throw (
+            lastError ||
+            new Error("Failed to fetch movies.")
+        );
+
     }
+
 
 
     try {
@@ -282,17 +418,26 @@ async function fetchPage(page) {
                 expires:
                     Date.now() +
                     CACHE_TTL_MS
+                expires:
+                    Date.now() +
+                    CACHE_TTL_MS
             })
         );
 
     } catch {
         // Ignore localStorage errors.
+        // Ignore localStorage errors.
     }
+
 
 
     return json;
 }
 
+
+/* =========================================================
+   LOAD ALL MOVIES
+========================================================= */
 
 /* =========================================================
    LOAD ALL MOVIES
@@ -311,6 +456,12 @@ async function loadMovies() {
         page++
     ) {
 
+    for (
+        let page = 1;
+        page <= TOTAL_PAGES;
+        page++
+    ) {
+
         requests.push(
 
             fetchPage(page)
@@ -319,7 +470,16 @@ async function loadMovies() {
 
                     completed++;
 
+                    completed++;
 
+
+                    const progress =
+                        Math.round(
+                            (
+                                completed /
+                                TOTAL_PAGES
+                            ) * 100
+                        );
                     const progress =
                         Math.round(
                             (
@@ -339,6 +499,21 @@ async function loadMovies() {
 
                     if (loadingText) {
 
+                    if (loadingProgress) {
+
+                        loadingProgress.style.width =
+                            `${progress}%`;
+
+                    }
+
+
+                    if (loadingText) {
+
+                        loadingText.textContent =
+                            `Loading movies… ${progress}%`;
+
+                    }
+
                         loadingText.textContent =
                             `Loading movies… ${progress}%`;
 
@@ -352,7 +527,10 @@ async function loadMovies() {
                 })
 
 
+
                 .catch((error) => {
+
+                    completed++;
 
                     completed++;
 
@@ -363,17 +541,34 @@ async function loadMovies() {
                     );
 
 
+
                     return [];
 
                 })
 
         );
 
+
     }
+
 
 
     const pages =
         await Promise.all(requests);
+    const pages =
+        await Promise.all(requests);
+
+
+    const merged =
+        pages.flat();
+
+
+    /*
+       Remove duplicate movies.
+    */
+
+    const unique =
+        new Map();
 
 
     const merged =
@@ -401,10 +596,20 @@ async function loadMovies() {
                 movie
             );
 
+
+            unique.set(
+                movie.id,
+                movie
+            );
+
         }
 
     });
 
+
+
+    allMovies =
+        [...unique.values()];
 
     allMovies =
         [...unique.values()];
@@ -412,7 +617,11 @@ async function loadMovies() {
 
     if (!allMovies.length) {
 
+
         showLoadError();
+
+        return false;
+
 
         return false;
 
@@ -421,6 +630,11 @@ async function loadMovies() {
 
     if (movieCount) {
 
+
+    if (movieCount) {
+
+        movieCount.textContent =
+            `${allMovies.length} movies`;
         movieCount.textContent =
             `${allMovies.length} movies`;
 
@@ -439,16 +653,37 @@ async function loadMovies() {
                     getRating(a)
             )
             .slice(0, 20);
+    }
+
+
+    /*
+       Best movies from all pages.
+    */
+
+    bestMovies =
+        [...allMovies]
+            .sort(
+                (a, b) =>
+                    getRating(b) -
+                    getRating(a)
+            )
+            .slice(0, 20);
+
 
 
     renderHero();
 
+
     renderBestMovies();
+
 
     renderRecommendation();
 
+
     renderPage(1);
 
+
+    return true;
 
     return true;
 }
@@ -458,12 +693,30 @@ async function loadMovies() {
    LOAD ERROR
 ========================================================= */
 
+/* =========================================================
+   LOAD ERROR
+========================================================= */
+
 function showLoadError() {
+
+    if (loadingText) {
 
     if (loadingText) {
 
         loadingText.textContent =
             "Couldn't load movies. Please check your connection and refresh.";
+        loadingText.textContent =
+            "Couldn't load movies. Please check your connection and refresh.";
+
+    }
+
+
+    if (loadingProgress) {
+
+        loadingProgress.style.width =
+            "0%";
+
+    }
 
     }
 
@@ -481,6 +734,9 @@ function showLoadError() {
 /* =========================================================
    MOVIE CARD
 ========================================================= */
+/* =========================================================
+   MOVIE CARD
+========================================================= */
 
 function movieCard(movie) {
 
@@ -490,8 +746,15 @@ function movieCard(movie) {
     const poster =
         imageURL(movie.poster);
 
+    if (!movie) return "";
+
+
+    const poster =
+        imageURL(movie.poster);
+
 
     return `
+
 
         <article
             class="movie-card glow-card"
@@ -508,6 +771,7 @@ function movieCard(movie) {
 
                         ? `
 
+
                             <img
                                 src="${poster}"
                                 alt="${escapeHTML(movie.title)}"
@@ -519,18 +783,22 @@ function movieCard(movie) {
                                 "
                             >
 
+
                         `
 
                         : `
+
 
                             <div class="no-poster">
                                 No Image
                             </div>
 
+
                         `
                 }
 
             </div>
+
 
 
             <div class="movie-info">
@@ -540,11 +808,13 @@ function movieCard(movie) {
                 </div>
 
 
+
                 <div class="movie-meta">
 
                     <span>
                         ${escapeHTML(movie.year || "—")}
                     </span>
+
 
 
                     <span class="movie-rating">
@@ -557,16 +827,21 @@ function movieCard(movie) {
 
         </article>
 
+
     `;
 }
 
 
 /* =========================================================
+/* =========================================================
    HERO
+========================================================= */
 ========================================================= */
 
 function renderHero() {
 
+    const movie =
+        bestMovies[0];
     const movie =
         bestMovies[0];
 
@@ -579,12 +854,24 @@ function renderHero() {
     if (!poster) return;
 
 
+    const poster =
+        imageURL(movie.poster);
+
+    if (!poster) return;
+
+
+    const heroImg =
+        new Image();
     const heroImg =
         new Image();
 
     heroImg.referrerPolicy =
         "no-referrer";
+    heroImg.referrerPolicy =
+        "no-referrer";
 
+    heroImg.src =
+        poster;
     heroImg.src =
         poster;
 }
@@ -593,8 +880,14 @@ function renderHero() {
 /* =========================================================
    CAROUSEL
 ========================================================= */
+/* =========================================================
+   CAROUSEL
+========================================================= */
 
 function getCardsPerView() {
+
+    const width =
+        window.innerWidth;
 
     const width =
         window.innerWidth;
@@ -615,11 +908,22 @@ function renderBestMovies() {
     if (!bestCarousel) return;
 
 
+    if (!bestCarousel) return;
+
+
     bestCarousel.innerHTML =
         bestMovies
             .map(movieCard)
             .join("");
 
+        bestMovies
+            .map(movieCard)
+            .join("");
+
+
+    attachCardEvents(
+        bestCarousel
+    );
 
     attachCardEvents(
         bestCarousel
@@ -637,7 +941,14 @@ function layoutCarousel() {
     if (!bestCarousel) return;
 
 
+    if (!bestCarousel) return;
+
+
     const cards =
+        bestCarousel.querySelectorAll(
+            ".movie-card"
+        );
+
         bestCarousel.querySelectorAll(
             ".movie-card"
         );
@@ -646,8 +957,10 @@ function layoutCarousel() {
     if (!cards.length) return;
 
 
+
     carouselCardsPerView =
         getCardsPerView();
+
 
 
     const viewport =
@@ -657,8 +970,13 @@ function layoutCarousel() {
     if (!viewport) return;
 
 
+
+    if (!viewport) return;
+
+
     const viewportWidth =
         viewport.clientWidth;
+
 
 
     const gap =
@@ -666,12 +984,24 @@ function layoutCarousel() {
             getComputedStyle(
                 bestCarousel
             ).gap
+            getComputedStyle(
+                bestCarousel
+            ).gap
         ) || 18;
+
 
 
     const cardWidth =
         (
             viewportWidth -
+            gap *
+            (
+                carouselCardsPerView -
+                1
+            )
+        ) /
+        carouselCardsPerView;
+
             gap *
             (
                 carouselCardsPerView -
@@ -689,12 +1019,14 @@ function layoutCarousel() {
     });
 
 
+
     const maxIndex =
         Math.max(
             0,
             cards.length -
             carouselCardsPerView
         );
+
 
 
     carouselIndex =
@@ -704,8 +1036,14 @@ function layoutCarousel() {
         );
 
 
+
     const offset =
         carouselIndex *
+        (
+            cardWidth +
+            gap
+        );
+
         (
             cardWidth +
             gap
@@ -717,7 +1055,13 @@ function layoutCarousel() {
 
 
     if (bestPrevBtn) {
+        `translate3d(-${offset}px, 0, 0)`;
 
+
+    if (bestPrevBtn) {
+
+        bestPrevBtn.disabled =
+            carouselIndex <= 0;
         bestPrevBtn.disabled =
             carouselIndex <= 0;
 
@@ -730,11 +1074,24 @@ function layoutCarousel() {
             carouselIndex >= maxIndex;
 
     }
+    }
 
+
+    if (bestNextBtn) {
+
+        bestNextBtn.disabled =
+            carouselIndex >= maxIndex;
+
+    }
+
+}
 }
 
 
 function moveCarousel(direction) {
+
+    if (!bestCarousel) return;
+
 
     if (!bestCarousel) return;
 
@@ -744,8 +1101,13 @@ function moveCarousel(direction) {
             ".movie-card"
         );
 
+        bestCarousel.querySelectorAll(
+            ".movie-card"
+        );
+
 
     if (!cards.length) return;
+
 
 
     const maxIndex =
@@ -754,6 +1116,7 @@ function moveCarousel(direction) {
             cards.length -
             carouselCardsPerView
         );
+
 
 
     carouselIndex =
@@ -768,16 +1131,30 @@ function moveCarousel(direction) {
         );
 
 
+
     layoutCarousel();
 }
 
 
 /* =========================================================
+/* =========================================================
    CAROUSEL BUTTONS
 ========================================================= */
 
 if (bestNextBtn) {
+========================================================= */
 
+if (bestNextBtn) {
+
+    bestNextBtn.addEventListener(
+        "click",
+        () => moveCarousel(1)
+    );
+
+}
+
+
+if (bestPrevBtn) {
     bestNextBtn.addEventListener(
         "click",
         () => moveCarousel(1)
@@ -792,12 +1169,20 @@ if (bestPrevBtn) {
         "click",
         () => moveCarousel(-1)
     );
+    bestPrevBtn.addEventListener(
+        "click",
+        () => moveCarousel(-1)
+    );
 
+}
 }
 
 
 /* =========================================================
+
+/* =========================================================
    MOBILE CAROUSEL SWIPE
+========================================================= */
 ========================================================= */
 
 let carouselTouchStartX = 0;
@@ -807,29 +1192,50 @@ let carouselIsDragging = false;
 
 
 if (bestCarousel) {
+if (bestCarousel) {
 
+    bestCarousel.addEventListener(
+        "touchstart",
+        (event) => {
     bestCarousel.addEventListener(
         "touchstart",
         (event) => {
 
             if (!event.touches.length) return;
 
+            if (!event.touches.length) return;
 
+
+            carouselTouchStartX =
+                event.touches[0].clientX;
             carouselTouchStartX =
                 event.touches[0].clientX;
 
             carouselTouchStartY =
                 event.touches[0].clientY;
+            carouselTouchStartY =
+                event.touches[0].clientY;
 
             carouselTouchCurrentX =
                 carouselTouchStartX;
+            carouselTouchCurrentX =
+                carouselTouchStartX;
+
+            carouselIsDragging = true;
 
             carouselIsDragging = true;
 
 
             bestCarousel.style.transition =
                 "none";
+            bestCarousel.style.transition =
+                "none";
 
+        },
+        {
+            passive: true
+        }
+    );
         },
         {
             passive: true
@@ -840,12 +1246,20 @@ if (bestCarousel) {
     bestCarousel.addEventListener(
         "touchmove",
         (event) => {
+    bestCarousel.addEventListener(
+        "touchmove",
+        (event) => {
 
+            if (!carouselIsDragging) return;
             if (!carouselIsDragging) return;
 
             if (!event.touches.length) return;
 
+            if (!event.touches.length) return;
 
+
+            carouselTouchCurrentX =
+                event.touches[0].clientX;
             carouselTouchCurrentX =
                 event.touches[0].clientX;
 
@@ -853,6 +1267,13 @@ if (bestCarousel) {
             const currentY =
                 event.touches[0].clientY;
 
+            const currentY =
+                event.touches[0].clientY;
+
+
+            const deltaX =
+                carouselTouchCurrentX -
+                carouselTouchStartX;
 
             const deltaX =
                 carouselTouchCurrentX -
@@ -863,6 +1284,15 @@ if (bestCarousel) {
                 currentY -
                 carouselTouchStartY;
 
+            const deltaY =
+                currentY -
+                carouselTouchStartY;
+
+
+            /*
+               اگر حرکت عمودی باشد،
+               اجازه می‌دهیم صفحه عادی Scroll شود.
+            */
 
             /*
                اگر حرکت عمودی باشد،
@@ -875,11 +1305,24 @@ if (bestCarousel) {
             ) {
 
                 carouselIsDragging = false;
+            if (
+                Math.abs(deltaY) >
+                Math.abs(deltaX)
+            ) {
 
+                carouselIsDragging = false;
+
+                bestCarousel.style.transition = "";
                 bestCarousel.style.transition = "";
 
             }
+            }
 
+        },
+        {
+            passive: true
+        }
+    );
         },
         {
             passive: true
@@ -890,9 +1333,16 @@ if (bestCarousel) {
     bestCarousel.addEventListener(
         "touchend",
         () => {
+    bestCarousel.addEventListener(
+        "touchend",
+        () => {
 
             if (!carouselIsDragging) return;
 
+            if (!carouselIsDragging) return;
+
+
+            carouselIsDragging = false;
 
             carouselIsDragging = false;
 
@@ -900,11 +1350,17 @@ if (bestCarousel) {
             const deltaX =
                 carouselTouchCurrentX -
                 carouselTouchStartX;
+            const deltaX =
+                carouselTouchCurrentX -
+                carouselTouchStartX;
 
 
             const swipeThreshold = 50;
 
+            const swipeThreshold = 50;
 
+
+            bestCarousel.style.transition = "";
             bestCarousel.style.transition = "";
 
 
@@ -912,9 +1368,17 @@ if (bestCarousel) {
                 deltaX <
                 -swipeThreshold
             ) {
+            if (
+                deltaX <
+                -swipeThreshold
+            ) {
 
                 moveCarousel(1);
+                moveCarousel(1);
 
+                return;
+
+            }
                 return;
 
             }
@@ -924,16 +1388,30 @@ if (bestCarousel) {
                 deltaX >
                 swipeThreshold
             ) {
+            if (
+                deltaX >
+                swipeThreshold
+            ) {
 
                 moveCarousel(-1);
+                moveCarousel(-1);
 
+                return;
+
+            }
                 return;
 
             }
 
 
             layoutCarousel();
+            layoutCarousel();
 
+        },
+        {
+            passive: true
+        }
+    );
         },
         {
             passive: true
@@ -944,11 +1422,17 @@ if (bestCarousel) {
     bestCarousel.addEventListener(
         "touchcancel",
         () => {
+    bestCarousel.addEventListener(
+        "touchcancel",
+        () => {
 
+            carouselIsDragging = false;
             carouselIsDragging = false;
 
             bestCarousel.style.transition = "";
+            bestCarousel.style.transition = "";
 
+            layoutCarousel();
             layoutCarousel();
 
         },
@@ -956,7 +1440,13 @@ if (bestCarousel) {
             passive: true
         }
     );
+        },
+        {
+            passive: true
+        }
+    );
 
+}
 }
 
 
@@ -970,7 +1460,35 @@ window.addEventListener(
 
 
 /* =========================================================
+/* =========================================================
    DAILY RECOMMENDATION
+========================================================= */
+
+function getTodayKey() {
+
+    const now =
+        new Date();
+
+
+    const year =
+        now.getFullYear();
+
+
+    const month =
+        String(
+            now.getMonth() + 1
+        ).padStart(2, "0");
+
+
+    const day =
+        String(
+            now.getDate()
+        ).padStart(2, "0");
+
+
+    return `${year}-${month}-${day}`;
+}
+
 ========================================================= */
 
 function getTodayKey() {
@@ -1005,8 +1523,18 @@ function getDailyMovie() {
         return null;
     }
 
+    if (!allMovies.length) {
+        return null;
+    }
+
 
     const today =
+        getTodayKey();
+
+
+    const storageKey =
+        "neonflix-daily-movie";
+
         getTodayKey();
 
 
@@ -1017,7 +1545,9 @@ function getDailyMovie() {
     const stored =
         localStorage.getItem(
             storageKey
+            storageKey
         );
+
 
 
     if (stored) {
@@ -1027,6 +1557,11 @@ function getDailyMovie() {
             const data =
                 JSON.parse(stored);
 
+
+            if (
+                data.date === today &&
+                data.id != null
+            ) {
 
             if (
                 data.date === today &&
@@ -1047,6 +1582,17 @@ function getDailyMovie() {
 
                 }
 
+                            String(movie.id) ===
+                            String(data.id)
+                    );
+
+
+                if (found) {
+
+                    return found;
+
+                }
+
             }
 
         } catch {
@@ -1055,12 +1601,20 @@ function getDailyMovie() {
                 storageKey
             );
 
+
+            localStorage.removeItem(
+                storageKey
+            );
+
         }
+
 
     }
 
 
+
     let hash = 0;
+
 
 
     for (const char of today) {
@@ -1071,16 +1625,36 @@ function getDailyMovie() {
                 char.charCodeAt(0)
             ) >>> 0;
 
+
     }
+
 
 
     const index =
         hash %
         allMovies.length;
 
+        hash %
+        allMovies.length;
+
 
     const movie =
         allMovies[index];
+
+
+    try {
+
+        localStorage.setItem(
+            storageKey,
+            JSON.stringify({
+                date: today,
+                id: movie.id
+            })
+        );
+
+    } catch {
+        // Ignore storage errors.
+    }
 
 
     try {
@@ -1106,6 +1680,10 @@ function getDailyMovie() {
    DAILY RECOMMENDATION CARD
 ========================================================= */
 
+/* =========================================================
+   DAILY RECOMMENDATION CARD
+========================================================= */
+
 function renderRecommendation() {
 
     const movie =
@@ -1115,8 +1693,12 @@ function renderRecommendation() {
     if (!movie || !recommendedMovie) return;
 
 
+    if (!movie || !recommendedMovie) return;
+
+
     recommendedMovie.innerHTML =
         movieCard(movie);
+
 
 
     attachCardEvents(
@@ -1124,10 +1706,12 @@ function renderRecommendation() {
     );
 
 
+
     const recommendationButton =
         document.getElementById(
             "recommendationButton"
         );
+
 
 
     if (recommendationButton) {
@@ -1144,11 +1728,24 @@ function renderRecommendation() {
 
     }
 
+            (event) => {
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                openModal(movie);
+
+            };
+
+    }
+
 }
 
 
 /* =========================================================
+/* =========================================================
    PAGINATION
+========================================================= */
 ========================================================= */
 
 const PAGE_SIZE = 10;
@@ -1159,8 +1756,15 @@ function renderPage(page) {
     currentPage =
         page;
 
+    currentPage =
+        page;
+
 
     const start =
+        (
+            page -
+            1
+        ) *
         (
             page -
             1
@@ -1168,12 +1772,19 @@ function renderPage(page) {
         PAGE_SIZE;
 
 
+
     const movies =
         allMovies.slice(
             start,
             start +
             PAGE_SIZE
+            start +
+            PAGE_SIZE
         );
+
+
+    if (!allMoviesContainer) return;
+
 
 
     if (!allMoviesContainer) return;
@@ -1188,6 +1799,7 @@ function renderPage(page) {
 
             : `
 
+
                 <div class="empty-state">
 
                     <strong>
@@ -1196,12 +1808,16 @@ function renderPage(page) {
 
                     <br>
 
+                    <br>
+
                     Try a different page
                     or search instead.
 
                 </div>
 
+
             `;
+
 
 
     attachCardEvents(
@@ -1209,11 +1825,18 @@ function renderPage(page) {
     );
 
 
+
     renderPagination();
 }
 
 
 function renderPagination() {
+
+    if (!pageNumbers) return;
+
+
+    pageNumbers.innerHTML =
+        "";
 
     if (!pageNumbers) return;
 
@@ -1232,12 +1855,16 @@ function renderPagination() {
         );
 
 
+
     const start =
         Math.max(
             1,
             currentPage -
             2
+            currentPage -
+            2
         );
+
 
 
     const end =
@@ -1245,7 +1872,10 @@ function renderPagination() {
             totalPages,
             currentPage +
             2
+            currentPage +
+            2
         );
+
 
 
     for (
@@ -1260,15 +1890,20 @@ function renderPagination() {
             );
 
 
+
         button.className =
             "page-number";
+
 
 
         button.type =
             "button";
 
 
+
         if (
+            page ===
+            currentPage
             page ===
             currentPage
         ) {
@@ -1278,12 +1913,15 @@ function renderPagination() {
             );
 
 
+
             button.setAttribute(
                 "aria-current",
                 "page"
             );
 
+
         }
+
 
 
         button.textContent =
@@ -1293,8 +1931,24 @@ function renderPagination() {
         button.onclick =
             () => {
 
+        button.onclick =
+            () => {
+
+                renderPage(page);
                 renderPage(page);
 
+
+                const section =
+                    document.getElementById(
+                        "allMoviesSection"
+                    );
+
+
+                if (section) {
+
+                    section.scrollIntoView({
+                        behavior: "smooth"
+                    });
 
                 const section =
                     document.getElementById(
@@ -1311,20 +1965,47 @@ function renderPagination() {
                 }
 
             };
+                }
+
+            };
+
 
 
         pageNumbers.appendChild(
             button
         );
 
+
     }
+
+
+    if (prevPageBtn) {
 
 
     if (prevPageBtn) {
 
         prevPageBtn.disabled =
             currentPage === 1;
+        prevPageBtn.disabled =
+            currentPage === 1;
 
+    }
+
+
+    if (nextPageBtn) {
+
+        nextPageBtn.disabled =
+            currentPage === totalPages;
+
+    }
+
+}
+
+
+if (prevPageBtn) {
+
+    prevPageBtn.onclick =
+        () => {
     }
 
 
@@ -1347,7 +2028,27 @@ if (prevPageBtn) {
                 currentPage >
                 1
             ) {
+            if (
+                currentPage >
+                1
+            ) {
 
+                renderPage(
+                    currentPage -
+                    1
+                );
+
+            }
+
+        };
+
+}
+
+
+if (nextPageBtn) {
+
+    nextPageBtn.onclick =
+        () => {
                 renderPage(
                     currentPage -
                     1
@@ -1370,7 +2071,17 @@ if (nextPageBtn) {
                     allMovies.length /
                     PAGE_SIZE
                 );
+            const totalPages =
+                Math.ceil(
+                    allMovies.length /
+                    PAGE_SIZE
+                );
 
+
+            if (
+                currentPage <
+                totalPages
+            ) {
 
             if (
                 currentPage <
@@ -1381,16 +2092,29 @@ if (nextPageBtn) {
                     currentPage +
                     1
                 );
+                renderPage(
+                    currentPage +
+                    1
+                );
 
+            }
+
+        };
             }
 
         };
 
 }
+}
 
 
 /* =========================================================
+
+/* =========================================================
    SEARCH
+========================================================= */
+
+if (searchInput) {
 ========================================================= */
 
 if (searchInput) {
@@ -1399,11 +2123,25 @@ if (searchInput) {
         "input",
         handleSearch
     );
+    searchInput.addEventListener(
+        "input",
+        handleSearch
+    );
+
+}
 
 }
 
 
 function handleSearch() {
+
+    if (
+        !searchInput ||
+        !searchResults
+    ) {
+        return;
+    }
+
 
     if (
         !searchInput ||
@@ -1419,11 +2157,16 @@ function handleSearch() {
             .toLowerCase();
 
 
+
     if (!query) {
 
         searchResults.classList.remove(
             "active"
         );
+
+
+        searchResults.innerHTML =
+            "";
 
 
         searchResults.innerHTML =
@@ -1436,9 +2179,12 @@ function handleSearch() {
         );
 
 
+
         return;
 
+
     }
+
 
 
     const results =
@@ -1452,21 +2198,26 @@ function handleSearch() {
             .slice(0, 8);
 
 
+
     if (!results.length) {
 
         searchResults.innerHTML =
             `
 
+
                 <div class="search-empty">
                     No movies found
                 </div>
 
+
             `;
+
 
 
         searchResults.classList.add(
             "active"
         );
+
 
 
         searchInput.setAttribute(
@@ -1475,15 +2226,19 @@ function handleSearch() {
         );
 
 
+
         return;
 
+
     }
+
 
 
     searchResults.innerHTML =
         results
             .map(
                 (movie) => `
+
 
                     <div
                         class="search-result"
@@ -1496,6 +2251,10 @@ function handleSearch() {
                             src="${imageURL(movie.poster)}"
                             alt=""
                             loading="lazy"
+                            referrerpolicy="no-referrer"
+                            onerror="
+                                this.style.visibility='hidden'
+                            "
                             referrerpolicy="no-referrer"
                             onerror="
                                 this.style.visibility='hidden'
@@ -1516,14 +2275,17 @@ function handleSearch() {
 
                     </div>
 
+
                 `
             )
             .join("");
 
 
+
     searchResults.classList.add(
         "active"
     );
+
 
 
     searchInput.setAttribute(
@@ -1538,7 +2300,11 @@ function handleSearch() {
         )
         .forEach(
             (element) => {
+        .forEach(
+            (element) => {
 
+                const openResult =
+                    () => {
                 const openResult =
                     () => {
 
@@ -1546,7 +2312,18 @@ function handleSearch() {
                             Number(
                                 element.dataset.movieId
                             );
+                        const id =
+                            Number(
+                                element.dataset.movieId
+                            );
 
+
+                        const movie =
+                            allMovies.find(
+                                (item) =>
+                                    item.id ===
+                                    id
+                            );
 
                         const movie =
                             allMovies.find(
@@ -1563,6 +2340,14 @@ function handleSearch() {
                         }
 
 
+                        if (movie) {
+
+                            openModal(movie);
+
+                        }
+
+
+                        closeMobileSearch();
                         closeMobileSearch();
 
 
@@ -1570,6 +2355,13 @@ function handleSearch() {
                             "";
 
 
+                        searchInput.value =
+                            "";
+
+
+                        searchResults.classList.remove(
+                            "active"
+                        );
                         searchResults.classList.remove(
                             "active"
                         );
@@ -1582,11 +2374,22 @@ function handleSearch() {
 
                     };
 
+                        searchInput.setAttribute(
+                            "aria-expanded",
+                            "false"
+                        );
 
+                    };
+
+
+                element.onclick =
+                    openResult;
                 element.onclick =
                     openResult;
 
 
+                element.onkeydown =
+                    (event) => {
                 element.onkeydown =
                     (event) => {
 
@@ -1594,12 +2397,22 @@ function handleSearch() {
                             event.key ===
                             "Enter"
                         ) {
+                        if (
+                            event.key ===
+                            "Enter"
+                        ) {
 
+                            openResult();
                             openResult();
 
                         }
+                        }
 
                     };
+                    };
+
+            }
+        );
 
             }
         );
@@ -1607,6 +2420,9 @@ function handleSearch() {
 }
 
 
+/* =========================================================
+   SEARCH OUTSIDE CLICK
+========================================================= */
 /* =========================================================
    SEARCH OUTSIDE CLICK
 ========================================================= */
@@ -1618,9 +2434,16 @@ document.addEventListener(
         if (
             !searchWrapper ||
             searchWrapper.contains(
+            !searchWrapper ||
+            searchWrapper.contains(
                 event.target
             )
         ) {
+            return;
+        }
+
+
+        if (searchResults) {
             return;
         }
 
@@ -1630,6 +2453,11 @@ document.addEventListener(
             searchResults.classList.remove(
                 "active"
             );
+
+        }
+
+
+        if (searchInput) {
 
         }
 
@@ -1650,7 +2478,17 @@ document.addEventListener(
                 "mobile-open"
             )
         ) {
+        }
 
+
+        if (
+            searchWrapper &&
+            searchWrapper.classList.contains(
+                "mobile-open"
+            )
+        ) {
+
+            closeMobileSearch();
             closeMobileSearch();
 
         }
@@ -1660,8 +2498,17 @@ document.addEventListener(
 
 
 /* =========================================================
+/* =========================================================
    MOBILE SEARCH
 ========================================================= */
+========================================================= */
+
+if (mobileSearchButton) {
+
+    mobileSearchButton.onclick =
+        () => {
+
+            if (!searchWrapper) return;
 
 if (mobileSearchButton) {
 
@@ -1675,7 +2522,13 @@ if (mobileSearchButton) {
                 "mobile-open"
             );
 
+            searchWrapper.classList.add(
+                "mobile-open"
+            );
 
+
+            mobileSearchButton.style.display =
+                "none";
             mobileSearchButton.style.display =
                 "none";
 
@@ -1686,13 +2539,27 @@ if (mobileSearchButton) {
                     if (searchInput) {
                         searchInput.focus();
                     }
+            setTimeout(
+                () => {
 
+                    if (searchInput) {
+                        searchInput.focus();
+                    }
+
+                },
+                100
+            );
                 },
                 100
             );
 
         };
+        };
 
+}
+
+
+if (mobileSearchClose) {
 }
 
 
@@ -1700,11 +2567,18 @@ if (mobileSearchClose) {
 
     mobileSearchClose.onclick =
         closeMobileSearch;
+    mobileSearchClose.onclick =
+        closeMobileSearch;
+
+}
 
 }
 
 
 function closeMobileSearch() {
+
+    if (!searchWrapper) return;
+
 
     if (!searchWrapper) return;
 
@@ -1716,6 +2590,11 @@ function closeMobileSearch() {
 
     if (mobileSearchButton) {
 
+
+    if (mobileSearchButton) {
+
+        mobileSearchButton.style.display =
+            "";
         mobileSearchButton.style.display =
             "";
 
@@ -1731,7 +2610,22 @@ function closeMobileSearch() {
 
 
     if (searchResults) {
+    }
 
+
+    if (searchInput) {
+
+        searchInput.value =
+            "";
+
+    }
+
+
+    if (searchResults) {
+
+        searchResults.classList.remove(
+            "active"
+        );
         searchResults.classList.remove(
             "active"
         );
@@ -1752,11 +2646,30 @@ function closeMobileSearch() {
 
     }
 
+        searchResults.innerHTML =
+            "";
+
+    }
+
+
+    if (searchInput) {
+
+        searchInput.setAttribute(
+            "aria-expanded",
+            "false"
+        );
+
+    }
+
+}
 }
 
 
 /* =========================================================
+
+/* =========================================================
    MODAL
+========================================================= */
 ========================================================= */
 
 function openModal(movie) {
@@ -1770,14 +2683,61 @@ function openModal(movie) {
     }
 
 
+    if (
+        !movie ||
+        !modal ||
+        !modalBody
+    ) {
+        return;
+    }
+
+
     const genres =
         Array.isArray(movie.genres)
+            ? movie.genres.filter(Boolean)
             ? movie.genres.filter(Boolean)
             : [];
 
 
+
     const images =
         Array.isArray(movie.images)
+            ? movie.images.filter(
+                (image) =>
+                    typeof image === "string" &&
+                    image.trim() !== ""
+            )
+            : [];
+
+
+    const screenshotsHTML =
+        images.length
+
+            ? `
+
+                <div class="screenshots">
+
+                    ${images
+                        .map(
+                            (image) => `
+
+                                <img
+                                    src="${imageURL(image)}"
+                                    alt="${escapeHTML(movie.title)} screenshot"
+                                    loading="lazy"
+                                    referrerpolicy="no-referrer"
+                                    class="screenshot-image"
+                                >
+
+                            `
+                        )
+                        .join("")}
+
+                </div>
+
+            `
+
+            : "";
             ? movie.images.filter(
                 (image) =>
                     typeof image === "string" &&
@@ -1825,6 +2785,7 @@ function openModal(movie) {
 
                     ? `
 
+
                         <img
                             class="modal-poster"
                             src="${imageURL(movie.poster)}"
@@ -1832,6 +2793,7 @@ function openModal(movie) {
                             referrerpolicy="no-referrer"
                             onerror="this.remove()"
                         >
+
 
                     `
 
@@ -1844,6 +2806,7 @@ function openModal(movie) {
                 <span class="section-kicker">
                     Movie Details
                 </span>
+
 
 
                 <h2 id="modalTitleSlot">
@@ -1861,12 +2824,14 @@ function openModal(movie) {
                     </span>
 
 
+
                     <span>
                         ${escapeHTML(
                             movie.year ||
                             "Unknown"
                         )}
                     </span>
+
 
 
                     <span>
@@ -1884,6 +2849,7 @@ function openModal(movie) {
 
                         ? `
 
+
                             <div class="genre-list">
 
                                 ${genres
@@ -1895,10 +2861,18 @@ function openModal(movie) {
                                             </span>
 
                                         `
+                                        (genre) => `
+
+                                            <span class="genre">
+                                                ${escapeHTML(genre)}
+                                            </span>
+
+                                        `
                                     )
                                     .join("")}
 
                             </div>
+
 
                         `
 
@@ -1922,6 +2896,7 @@ function openModal(movie) {
 
 
         ${screenshotsHTML}
+        ${screenshotsHTML}
 
     `;
 
@@ -1929,6 +2904,7 @@ function openModal(movie) {
     modal.classList.add(
         "active"
     );
+
 
 
     document.body.style.overflow =
@@ -1939,6 +2915,12 @@ function openModal(movie) {
 
         modalClose.focus();
 
+    if (modalClose) {
+
+        modalClose.focus();
+
+    }
+
     }
 
 
@@ -1948,7 +2930,12 @@ function openModal(movie) {
         )
         .forEach(
             (img) => {
+        .forEach(
+            (img) => {
 
+                img.addEventListener(
+                    "click",
+                    () => {
                 img.addEventListener(
                     "click",
                     () => {
@@ -1956,6 +2943,43 @@ function openModal(movie) {
                         openFullscreenImage(
                             img.src
                         );
+                        openFullscreenImage(
+                            img.src
+                        );
+
+                    }
+                );
+
+
+                img.addEventListener(
+                    "error",
+                    () => {
+
+                        img.remove();
+
+
+                        const screenshotContainer =
+                            modal.querySelector(
+                                ".screenshots"
+                            );
+
+
+                        if (
+                            screenshotContainer &&
+                            !screenshotContainer.querySelector(
+                                ".screenshot-image"
+                            )
+                        ) {
+
+                            screenshotContainer.remove();
+
+                        }
+
+                    }
+                );
+
+            }
+        );
 
                     }
                 );
@@ -1995,10 +3019,15 @@ function openModal(movie) {
 
 
 /* =========================================================
+/* =========================================================
    FULLSCREEN IMAGE
+========================================================= */
 ========================================================= */
 
 function openFullscreenImage(src) {
+
+    if (!src) return;
+
 
     if (!src) return;
 
@@ -2007,6 +3036,7 @@ function openFullscreenImage(src) {
         document.createElement(
             "div"
         );
+
 
 
     viewer.className =
@@ -2019,11 +3049,15 @@ function openFullscreenImage(src) {
         );
 
 
+
     image.src =
         src;
 
     image.alt =
         "";
+
+    image.referrerPolicy =
+        "no-referrer";
 
     image.referrerPolicy =
         "no-referrer";
@@ -2041,11 +3075,38 @@ function openFullscreenImage(src) {
 
     requestAnimationFrame(
         () => {
+    requestAnimationFrame(
+        () => {
 
             viewer.classList.add(
                 "active"
             );
+            viewer.classList.add(
+                "active"
+            );
 
+        }
+    );
+
+
+    const closeViewer =
+        () => {
+
+            viewer.remove();
+
+
+            document.removeEventListener(
+                "keydown",
+                escHandler
+            );
+
+        };
+
+
+    viewer.addEventListener(
+        "click",
+        closeViewer
+    );
         }
     );
 
@@ -2079,6 +3140,7 @@ function openFullscreenImage(src) {
             ) {
 
                 closeViewer();
+                closeViewer();
 
             }
 
@@ -2090,14 +3152,20 @@ function openFullscreenImage(src) {
         escHandler
     );
 
+
 }
 
 
 /* =========================================================
+/* =========================================================
    CLOSE MODAL
+========================================================= */
 ========================================================= */
 
 function closeModal() {
+
+    if (!modal) return;
+
 
     if (!modal) return;
 
@@ -2107,16 +3175,24 @@ function closeModal() {
     );
 
 
+
     document.body.style.overflow =
         "";
+
 
 }
 
 
 if (modalClose) {
 
+if (modalClose) {
+
     modalClose.onclick =
         closeModal;
+    modalClose.onclick =
+        closeModal;
+
+}
 
 }
 
@@ -2125,6 +3201,7 @@ const modalBackdrop =
     document.querySelector(
         ".modal-backdrop"
     );
+
 
 
 if (modalBackdrop) {
@@ -2142,6 +3219,7 @@ document.addEventListener(
         if (
             event.key === "Escape" &&
             modal &&
+            modal &&
             modal.classList.contains(
                 "active"
             )
@@ -2156,8 +3234,14 @@ document.addEventListener(
 
 
 /* =========================================================
+/* =========================================================
    CARD EVENTS
 ========================================================= */
+========================================================= */
+
+function attachCardEvents(container) {
+
+    if (!container) return;
 
 function attachCardEvents(container) {
 
@@ -2170,11 +3254,17 @@ function attachCardEvents(container) {
         )
         .forEach(
             (card) => {
+        .forEach(
+            (card) => {
 
+                card.onclick =
+                    openCard;
                 card.onclick =
                     openCard;
 
 
+                card.onkeydown =
+                    (event) => {
                 card.onkeydown =
                     (event) => {
 
@@ -2182,14 +3272,50 @@ function attachCardEvents(container) {
                             event.key === "Enter" ||
                             event.key === " "
                         ) {
+                        if (
+                            event.key === "Enter" ||
+                            event.key === " "
+                        ) {
 
+                            event.preventDefault();
                             event.preventDefault();
 
                             openCard();
+                            openCard();
 
+                        }
                         }
 
                     };
+                    };
+
+
+                function openCard() {
+
+                    const id =
+                        Number(
+                            card.dataset.movieId
+                        );
+
+
+                    const movie =
+                        allMovies.find(
+                            (item) =>
+                                Number(item.id) ===
+                                id
+                        );
+
+
+                    if (movie) {
+
+                        openModal(movie);
+
+                    }
+
+                }
+
+            }
+        );
 
 
                 function openCard() {
@@ -2225,6 +3351,9 @@ function attachCardEvents(container) {
 /* =========================================================
    MOUSE FOLLOWING NEON GLOW
 ========================================================= */
+/* =========================================================
+   MOUSE FOLLOWING NEON GLOW
+========================================================= */
 
 document.addEventListener(
     "pointermove",
@@ -2236,7 +3365,9 @@ document.addEventListener(
             );
 
 
+
         if (!card) return;
+
 
 
         const rect =
@@ -2259,7 +3390,9 @@ document.addEventListener(
 
 
 /* =========================================================
+/* =========================================================
    AMBIENT PAGE GLOW
+========================================================= */
 ========================================================= */
 
 document.addEventListener(
@@ -2272,6 +3405,7 @@ document.addEventListener(
         );
 
 
+
         document.documentElement.style.setProperty(
             "--my",
             `${event.clientY}px`
@@ -2282,7 +3416,9 @@ document.addEventListener(
 
 
 /* =========================================================
+/* =========================================================
    BROWSE BUTTON
+========================================================= */
 ========================================================= */
 
 const browseButton =
@@ -2295,7 +3431,20 @@ if (browseButton) {
 
     browseButton.onclick =
         () => {
+    browseButton.onclick =
+        () => {
 
+            const section =
+                document.getElementById(
+                    "allMoviesSection"
+                );
+
+
+            if (section) {
+
+                section.scrollIntoView({
+                    behavior: "smooth"
+                });
             const section =
                 document.getElementById(
                     "allMoviesSection"
@@ -2311,14 +3460,48 @@ if (browseButton) {
             }
 
         };
+            }
+
+        };
 
 }
 
 
 /* =========================================================
+/* =========================================================
    START
 ========================================================= */
+========================================================= */
 
+async function startApp() {
+
+    try {
+
+        const success =
+            await loadMovies();
+
+
+        if (success) {
+
+            /*
+               همه محتوا Render شده.
+               حالا Loader را محو کن.
+            */
+            hideLoader();
+
+        } else {
+
+            /*
+               در صورت خطا هم صفحه قفل نماند.
+            */
+            setTimeout(
+                hideLoader,
+                1500
+            );
+
+        }
+
+    } catch (error) {
 async function startApp() {
 
     try {
@@ -2351,8 +3534,10 @@ async function startApp() {
 
         console.error(
             "CineVerse startup error:",
+            "CineVerse startup error:",
             error
         );
+
 
 
         showLoadError();
