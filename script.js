@@ -2,20 +2,20 @@
    NEONFLIX — APP
 ========================================================= */
 
-const API = "http://moviesapi.ir/api/v1/movies?page=";
+const API = "https://moviesapi.ir/api/movies?page=";
 const TOTAL_PAGES = 25;
-const CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
+const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
 
+const CORS_PROXIES = [
+    (url) => url,  // درخواست مستقیم به API
+];
 /*
    moviesapi.ir does not send an Access-Control-Allow-Origin header,
    so a direct browser fetch() is blocked by CORS.
 
    We try the direct request first, then use a public CORS proxy.
 */
-const CORS_PROXIES = [
-    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    (url) => url,
-];
+
 
 let allMovies = [];
 let currentPage = 1;
