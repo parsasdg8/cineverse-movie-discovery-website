@@ -217,39 +217,37 @@ async function fetchPage(page) {
     let lastError = null;
 
 
-    for (const buildUrl of CORS_PROXIES) {
+   for (const buildUrl of CORS_PROXIES) {
 
-        try {
+    try {
 
-            const controller =
-                new AbortController();
-
-            const timeout =
-                setTimeout(() => {
-                    controller.abort();
-                }, 10000);
+        const response =
+            await fetch(
+                buildUrl(targetUrl)
+            );
 
 
-            const response =
-                await fetch(
-                    buildUrl(targetUrl),
-                    {
-                        signal: controller.signal
-                    }
-                );
+        if (!response.ok) {
+
+            throw new Error(
+                `API Error: ${response.status}`
+            );
+
+        }
 
 
-            clearTimeout(timeout);
+        json =
+            await response.json();
 
+        break;
 
-            if (!response.ok) {
+    } catch (error) {
 
-                throw new Error(
-                    `API Error: ${response.status}`
-                );
+        lastError = error;
 
-            }
+    }
 
+}
 
             json =
                 await response.json();
