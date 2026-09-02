@@ -4,8 +4,7 @@ const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
 
 const CORS_PROXIES = [
     (url) =>
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    (url) => url,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
 ];
 
 let allMovies = [];
