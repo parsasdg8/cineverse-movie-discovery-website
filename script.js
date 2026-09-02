@@ -26,9 +26,6 @@ const loadingText =
 const loadingProgress =
     document.getElementById("loadingProgress");
 
-const loadingText =
-    document.getElementById("loadingText");
-
 const loadingProgress =
     document.getElementById("loadingProgress");
 
