@@ -1,21 +1,12 @@
-/* =========================================================
-   NEONFLIX — APP
-========================================================= */
-
-const API = "https://moviesapi.ir/api/movies?page=";
+const API = "/api/movies?page=";
 const TOTAL_PAGES = 25;
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
 
 const CORS_PROXIES = [
-    (url) => url,  // درخواست مستقیم به API
+    (url) =>
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    (url) => url,
 ];
-/*
-   moviesapi.ir does not send an Access-Control-Allow-Origin header,
-   so a direct browser fetch() is blocked by CORS.
-
-   We try the direct request first, then use a public CORS proxy.
-*/
-
 
 let allMovies = [];
 let currentPage = 1;
@@ -25,49 +16,89 @@ let carouselIndex = 0;
 let carouselCardsPerView = 5;
 
 
-/* =========================
+/* =========================================================
    DOM
-========================= */
+========================================================= */
 
 const loader = document.getElementById("loader");
-const loadingText = document.getElementById("loadingText");
-const loadingProgress = document.getElementById("loadingProgress");
 
-const searchInput = document.getElementById("searchInput");
-const searchResults = document.getElementById("searchResults");
-const searchWrapper = document.getElementById("searchWrapper");
+const loadingText =
+    document.getElementById("loadingText");
 
-const mobileSearchButton = document.getElementById("mobileSearchButton");
-const mobileSearchClose = document.getElementById("mobileSearchClose");
+const loadingProgress =
+    document.getElementById("loadingProgress");
 
-const bestCarousel = document.getElementById("bestCarousel");
-const recommendedMovie = document.getElementById("recommendedMovie");
+const searchInput =
+    document.getElementById("searchInput");
 
-const allMoviesContainer = document.getElementById("allMovies");
-const movieCount = document.getElementById("movieCount");
+const searchResults =
+    document.getElementById("searchResults");
 
-const prevPageBtn = document.getElementById("prevPage");
-const nextPageBtn = document.getElementById("nextPage");
-const pageNumbers = document.getElementById("pageNumbers");
+const searchWrapper =
+    document.getElementById("searchWrapper");
 
-const bestPrevBtn = document.getElementById("bestPrev");
-const bestNextBtn = document.getElementById("bestNext");
+const mobileSearchButton =
+    document.getElementById("mobileSearchButton");
 
-const modal = document.getElementById("movieModal");
-const modalBody = document.getElementById("modalBody");
-const modalClose = document.getElementById("modalClose");
+const mobileSearchClose =
+    document.getElementById("mobileSearchClose");
+
+const bestCarousel =
+    document.getElementById("bestCarousel");
+
+const recommendedMovie =
+    document.getElementById("recommendedMovie");
+
+const allMoviesContainer =
+    document.getElementById("allMovies");
+
+const movieCount =
+    document.getElementById("movieCount");
+
+const prevPageBtn =
+    document.getElementById("prevPage");
+
+const nextPageBtn =
+    document.getElementById("nextPage");
+
+const pageNumbers =
+    document.getElementById("pageNumbers");
+
+const bestPrevBtn =
+    document.getElementById("bestPrev");
+
+const bestNextBtn =
+    document.getElementById("bestNext");
+
+const modal =
+    document.getElementById("movieModal");
+
+const modalBody =
+    document.getElementById("modalBody");
+
+const modalClose =
+    document.getElementById("modalClose");
 
 
-/* =========================
+/* =========================================================
+   INITIAL LOADING STATE
+========================================================= */
+
+document.body.classList.add("loading");
+
+
+/* =========================================================
    HELPERS
-========================= */
+========================================================= */
 
 function imageURL(url) {
+
     if (!url) return "";
 
-    // API serves images over HTTP.
-    // Upgrade to HTTPS when the website itself uses HTTPS.
-    if (location.protocol === "https:" && url.startsWith("http:")) {
+    if (
+        location.protocol === "https:" &&
+        url.startsWith("http:")
+    ) {
         return url.replace("http:", "https:");
     }
 
@@ -76,6 +107,7 @@ function imageURL(url) {
 
 
 function escapeHTML(value = "") {
+
     return String(value)
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
@@ -86,40 +118,85 @@ function escapeHTML(value = "") {
 
 
 function getRating(movie) {
-    const rating = parseFloat(movie?.imdb_rating);
-    return Number.isFinite(rating) ? rating : 0;
+
+    const rating =
+        parseFloat(movie?.imdb_rating);
+
+    return Number.isFinite(rating)
+        ? rating
+        : 0;
 }
 
 
 function debounce(fn, wait) {
+
     let timeout;
 
     return (...args) => {
+
         clearTimeout(timeout);
 
         timeout = setTimeout(() => {
             fn(...args);
         }, wait);
+
     };
 }
 
 
-/* =========================
+/* =========================================================
+   LOADER CONTROL
+========================================================= */
+
+function hideLoader() {
+
+    if (!loader) {
+        document.body.classList.remove("loading");
+        return;
+    }
+
+    /*
+       اول Loader را Fade Out می‌کنیم.
+       محتوا از همان ابتدا پشت Loader وجود دارد.
+    */
+    loader.classList.add("hidden");
+
+    /*
+       بعد از تمام شدن Fade،
+       محدودیت اسکرول Body را برمی‌داریم.
+    */
+    setTimeout(() => {
+
+        document.body.classList.remove("loading");
+
+    }, 550);
+
+}
+
+
+/* =========================================================
    API
-========================= */
+========================================================= */
 
 async function fetchPage(page) {
 
-    const cacheKey = `neonflix-page-${page}`;
-    const cached = localStorage.getItem(cacheKey);
+    const cacheKey =
+        `neonflix-page-${page}`;
+
+    const cached =
+        localStorage.getItem(cacheKey);
 
     if (cached) {
 
         try {
 
-            const parsed = JSON.parse(cached);
+            const parsed =
+                JSON.parse(cached);
 
-            if (parsed.expires && parsed.expires > Date.now()) {
+            if (
+                parsed.expires &&
+                parsed.expires > Date.now()
+            ) {
                 return parsed.data;
             }
 
@@ -130,37 +207,53 @@ async function fetchPage(page) {
             localStorage.removeItem(cacheKey);
 
         }
+
     }
 
-    const targetUrl = `${API}${page}`;
+
+    const targetUrl =
+        `${API}${page}`;
 
     let json = null;
     let lastError = null;
+
 
     for (const buildUrl of CORS_PROXIES) {
 
         try {
 
-            const controller = new AbortController();
+            const controller =
+                new AbortController();
 
-            const timeout = setTimeout(() => {
-                controller.abort();
-            }, 8000);
+            const timeout =
+                setTimeout(() => {
+                    controller.abort();
+                }, 10000);
 
-            const response = await fetch(
-                buildUrl(targetUrl),
-                {
-                    signal: controller.signal
-                }
-            );
+
+            const response =
+                await fetch(
+                    buildUrl(targetUrl),
+                    {
+                        signal: controller.signal
+                    }
+                );
+
 
             clearTimeout(timeout);
 
+
             if (!response.ok) {
-                throw new Error(`API Error: ${response.status}`);
+
+                throw new Error(
+                    `API Error: ${response.status}`
+                );
+
             }
 
-            json = await response.json();
+
+            json =
+                await response.json();
 
             break;
 
@@ -169,11 +262,19 @@ async function fetchPage(page) {
             lastError = error;
 
         }
+
     }
 
+
     if (!json) {
-        throw lastError || new Error("Failed to fetch movies.");
+
+        throw (
+            lastError ||
+            new Error("Failed to fetch movies.")
+        );
+
     }
+
 
     try {
 
@@ -181,17 +282,24 @@ async function fetchPage(page) {
             cacheKey,
             JSON.stringify({
                 data: json,
-                expires: Date.now() + CACHE_TTL_MS
+                expires:
+                    Date.now() +
+                    CACHE_TTL_MS
             })
         );
 
     } catch {
-        // localStorage unavailable/full.
+        // Ignore localStorage errors.
     }
+
 
     return json;
 }
 
+
+/* =========================================================
+   LOAD ALL MOVIES
+========================================================= */
 
 async function loadMovies() {
 
@@ -199,7 +307,12 @@ async function loadMovies() {
 
     const requests = [];
 
-    for (let page = 1; page <= TOTAL_PAGES; page++) {
+
+    for (
+        let page = 1;
+        page <= TOTAL_PAGES;
+        page++
+    ) {
 
         requests.push(
 
@@ -207,16 +320,33 @@ async function loadMovies() {
 
                 .then((data) => {
 
-                    completed += 1;
+                    completed++;
 
-                    const progress = Math.round(
-                        (completed / TOTAL_PAGES) * 100
-                    );
 
-                    loadingProgress.style.width = `${progress}%`;
+                    const progress =
+                        Math.round(
+                            (
+                                completed /
+                                TOTAL_PAGES
+                            ) * 100
+                        );
 
-                    loadingText.textContent =
-                        `Loading movies… ${progress}%`;
+
+                    if (loadingProgress) {
+
+                        loadingProgress.style.width =
+                            `${progress}%`;
+
+                    }
+
+
+                    if (loadingText) {
+
+                        loadingText.textContent =
+                            `Loading movies… ${progress}%`;
+
+                    }
+
 
                     return Array.isArray(data?.data)
                         ? data.data
@@ -224,28 +354,42 @@ async function loadMovies() {
 
                 })
 
+
                 .catch((error) => {
 
-                    completed += 1;
+                    completed++;
+
 
                     console.error(
                         `Page ${page} failed:`,
                         error
                     );
 
+
                     return [];
 
                 })
 
         );
+
     }
 
-    const pages = await Promise.all(requests);
 
-    const merged = pages.flat();
+    const pages =
+        await Promise.all(requests);
 
-    // Remove duplicates by ID.
-    const unique = new Map();
+
+    const merged =
+        pages.flat();
+
+
+    /*
+       Remove duplicate movies.
+    */
+
+    const unique =
+        new Map();
+
 
     merged.forEach((movie) => {
 
@@ -254,58 +398,104 @@ async function loadMovies() {
             movie.id != null &&
             !unique.has(movie.id)
         ) {
-            unique.set(movie.id, movie);
+
+            unique.set(
+                movie.id,
+                movie
+            );
+
         }
 
     });
 
-    allMovies = [...unique.values()];
+
+    allMovies =
+        [...unique.values()];
+
 
     if (!allMovies.length) {
+
         showLoadError();
-        return;
+
+        return false;
+
     }
 
-    movieCount.textContent =
-        `${allMovies.length} movies`;
 
-    // Best movies from ALL pages.
-    bestMovies = [...allMovies]
-        .sort(
-            (a, b) =>
-                getRating(b) - getRating(a)
-        )
-        .slice(0, 20);
+    if (movieCount) {
+
+        movieCount.textContent =
+            `${allMovies.length} movies`;
+
+    }
+
+
+    /*
+       Best movies from all pages.
+    */
+
+    bestMovies =
+        [...allMovies]
+            .sort(
+                (a, b) =>
+                    getRating(b) -
+                    getRating(a)
+            )
+            .slice(0, 20);
+
 
     renderHero();
+
     renderBestMovies();
+
     renderRecommendation();
+
     renderPage(1);
 
-    setTimeout(() => {
-        loader.classList.add("hidden");
-    }, 400);
+
+    return true;
 }
 
+
+/* =========================================================
+   LOAD ERROR
+========================================================= */
 
 function showLoadError() {
 
-    loadingText.textContent =
-        "Couldn't load movies. Please check your connection and refresh.";
+    if (loadingText) {
 
-    loadingProgress.style.width = "0%";
+        loadingText.textContent =
+            "Couldn't load movies. Please check your connection and refresh.";
+
+    }
+
+
+    if (loadingProgress) {
+
+        loadingProgress.style.width =
+            "0%";
+
+    }
+
 }
 
 
-/* =========================
-   CARD
-========================= */
+/* =========================================================
+   MOVIE CARD
+========================================================= */
 
 function movieCard(movie) {
 
-    const poster = imageURL(movie.poster);
+    if (!movie) return "";
+
+
+    const poster =
+        imageURL(movie.poster);
+
 
     return `
+
         <article
             class="movie-card glow-card"
             data-movie-id="${movie.id}"
@@ -320,6 +510,7 @@ function movieCard(movie) {
                     poster
 
                         ? `
+
                             <img
                                 src="${poster}"
                                 alt="${escapeHTML(movie.title)}"
@@ -330,16 +521,20 @@ function movieCard(movie) {
                                     this.closest('.movie-poster').innerHTML='<div class=&quot;no-poster&quot;>No Image</div>'
                                 "
                             >
+
                         `
 
                         : `
+
                             <div class="no-poster">
                                 No Image
                             </div>
+
                         `
                 }
 
             </div>
+
 
             <div class="movie-info">
 
@@ -347,11 +542,13 @@ function movieCard(movie) {
                     ${escapeHTML(movie.title)}
                 </div>
 
+
                 <div class="movie-meta">
 
                     <span>
                         ${escapeHTML(movie.year || "—")}
                     </span>
+
 
                     <span class="movie-rating">
                         ★ ${getRating(movie).toFixed(1)}
@@ -362,37 +559,49 @@ function movieCard(movie) {
             </div>
 
         </article>
+
     `;
 }
 
 
-/* =========================
+/* =========================================================
    HERO
-========================= */
+========================================================= */
 
 function renderHero() {
 
-    const movie = bestMovies[0];
+    const movie =
+        bestMovies[0];
 
     if (!movie) return;
 
-    const poster = imageURL(movie.poster);
 
-    const heroImg = new Image();
+    const poster =
+        imageURL(movie.poster);
 
-    heroImg.referrerPolicy = "no-referrer";
+    if (!poster) return;
 
-    heroImg.src = poster;
+
+    const heroImg =
+        new Image();
+
+    heroImg.referrerPolicy =
+        "no-referrer";
+
+    heroImg.src =
+        poster;
 }
 
 
-/* =========================
-   BEST MOVIES CAROUSEL
-========================= */
+/* =========================================================
+   CAROUSEL
+========================================================= */
 
 function getCardsPerView() {
 
-    const width = window.innerWidth;
+    const width =
+        window.innerWidth;
+
 
     if (width >= 1400) return 5;
 
@@ -406,10 +615,19 @@ function getCardsPerView() {
 
 function renderBestMovies() {
 
-    bestCarousel.innerHTML =
-        bestMovies.map(movieCard).join("");
+    if (!bestCarousel) return;
 
-    attachCardEvents(bestCarousel);
+
+    bestCarousel.innerHTML =
+        bestMovies
+            .map(movieCard)
+            .join("");
+
+
+    attachCardEvents(
+        bestCarousel
+    );
+
 
     carouselIndex = 0;
 
@@ -419,30 +637,52 @@ function renderBestMovies() {
 
 function layoutCarousel() {
 
+    if (!bestCarousel) return;
+
+
     const cards =
-        bestCarousel.querySelectorAll(".movie-card");
+        bestCarousel.querySelectorAll(
+            ".movie-card"
+        );
+
 
     if (!cards.length) return;
+
 
     carouselCardsPerView =
         getCardsPerView();
 
+
     const viewport =
         bestCarousel.parentElement;
+
+
+    if (!viewport) return;
+
 
     const viewportWidth =
         viewport.clientWidth;
 
+
     const gap =
         parseFloat(
-            getComputedStyle(bestCarousel).gap
+            getComputedStyle(
+                bestCarousel
+            ).gap
         ) || 18;
+
 
     const cardWidth =
         (
             viewportWidth -
-            gap * (carouselCardsPerView - 1)
-        ) / carouselCardsPerView;
+            gap *
+            (
+                carouselCardsPerView -
+                1
+            )
+        ) /
+        carouselCardsPerView;
+
 
     cards.forEach((card) => {
 
@@ -451,12 +691,14 @@ function layoutCarousel() {
 
     });
 
+
     const maxIndex =
         Math.max(
             0,
             cards.length -
             carouselCardsPerView
         );
+
 
     carouselIndex =
         Math.min(
@@ -464,31 +706,50 @@ function layoutCarousel() {
             maxIndex
         );
 
+
     const offset =
         carouselIndex *
-        (cardWidth + gap);
+        (
+            cardWidth +
+            gap
+        );
+
 
     bestCarousel.style.transform =
-        `translateX(-${offset}px)`;
+        `translate3d(-${offset}px, 0, 0)`;
 
-    bestPrevBtn.disabled =
-        carouselIndex <= 0;
 
-    bestNextBtn.disabled =
-        carouselIndex >= maxIndex;
+    if (bestPrevBtn) {
+
+        bestPrevBtn.disabled =
+            carouselIndex <= 0;
+
+    }
+
+
+    if (bestNextBtn) {
+
+        bestNextBtn.disabled =
+            carouselIndex >= maxIndex;
+
+    }
+
 }
 
 
-/*
-   Desktop / Button carousel
-*/
-
 function moveCarousel(direction) {
 
+    if (!bestCarousel) return;
+
+
     const cards =
-        bestCarousel.querySelectorAll(".movie-card");
+        bestCarousel.querySelectorAll(
+            ".movie-card"
+        );
+
 
     if (!cards.length) return;
+
 
     const maxIndex =
         Math.max(
@@ -496,6 +757,7 @@ function moveCarousel(direction) {
             cards.length -
             carouselCardsPerView
         );
+
 
     carouselIndex =
         Math.max(
@@ -508,206 +770,198 @@ function moveCarousel(direction) {
             )
         );
 
+
     layoutCarousel();
 }
 
 
-/* =========================
+/* =========================================================
    CAROUSEL BUTTONS
-========================= */
+========================================================= */
 
-bestNextBtn.addEventListener(
-    "click",
-    () => moveCarousel(1)
-);
+if (bestNextBtn) {
 
-bestPrevBtn.addEventListener(
-    "click",
-    () => moveCarousel(-1)
-);
+    bestNextBtn.addEventListener(
+        "click",
+        () => moveCarousel(1)
+    );
+
+}
 
 
-/* =========================
+if (bestPrevBtn) {
+
+    bestPrevBtn.addEventListener(
+        "click",
+        () => moveCarousel(-1)
+    );
+
+}
+
+
+/* =========================================================
    MOBILE CAROUSEL SWIPE
-========================= */
+========================================================= */
 
 let carouselTouchStartX = 0;
 let carouselTouchStartY = 0;
-
 let carouselTouchCurrentX = 0;
-
 let carouselIsDragging = false;
 
 
-/*
-   Start touch
-*/
+if (bestCarousel) {
 
-bestCarousel.addEventListener(
-    "touchstart",
-    (event) => {
+    bestCarousel.addEventListener(
+        "touchstart",
+        (event) => {
 
-        if (!event.touches.length) return;
-
-        carouselTouchStartX =
-            event.touches[0].clientX;
-
-        carouselTouchStartY =
-            event.touches[0].clientY;
-
-        carouselTouchCurrentX =
-            carouselTouchStartX;
-
-        carouselIsDragging = true;
-
-        bestCarousel.style.transition =
-            "none";
-
-    },
-    {
-        passive: true
-    }
-);
+            if (!event.touches.length) return;
 
 
-/*
-   Track finger
-*/
+            carouselTouchStartX =
+                event.touches[0].clientX;
 
-bestCarousel.addEventListener(
-    "touchmove",
-    (event) => {
+            carouselTouchStartY =
+                event.touches[0].clientY;
 
-        if (!carouselIsDragging) return;
+            carouselTouchCurrentX =
+                carouselTouchStartX;
 
-        if (!event.touches.length) return;
+            carouselIsDragging = true;
 
-        carouselTouchCurrentX =
-            event.touches[0].clientX;
-
-        const currentY =
-            event.touches[0].clientY;
-
-        const deltaX =
-            carouselTouchCurrentX -
-            carouselTouchStartX;
-
-        const deltaY =
-            currentY -
-            carouselTouchStartY;
-
-        /*
-           If the movement is mostly vertical,
-           let the page scroll normally.
-        */
-
-        if (
-            Math.abs(deltaY) >
-            Math.abs(deltaX)
-        ) {
-            carouselIsDragging = false;
 
             bestCarousel.style.transition =
-                "";
+                "none";
 
-            return;
+        },
+        {
+            passive: true
         }
-
-    },
-    {
-        passive: true
-    }
-);
+    );
 
 
-/*
-   Finish touch
-*/
+    bestCarousel.addEventListener(
+        "touchmove",
+        (event) => {
 
-bestCarousel.addEventListener(
-    "touchend",
-    () => {
+            if (!carouselIsDragging) return;
 
-        if (!carouselIsDragging) return;
+            if (!event.touches.length) return;
 
-        carouselIsDragging = false;
 
-        const deltaX =
-            carouselTouchCurrentX -
-            carouselTouchStartX;
+            carouselTouchCurrentX =
+                event.touches[0].clientX;
 
-        const swipeThreshold = 50;
 
-        /*
-           Restore normal transition.
-        */
+            const currentY =
+                event.touches[0].clientY;
 
-        bestCarousel.style.transition =
-            "";
 
-        /*
-           Swipe LEFT
-           -> next cards
-        */
+            const deltaX =
+                carouselTouchCurrentX -
+                carouselTouchStartX;
 
-        if (deltaX < -swipeThreshold) {
 
-            moveCarousel(1);
+            const deltaY =
+                currentY -
+                carouselTouchStartY;
 
-            return;
+
+            /*
+               اگر حرکت عمودی باشد،
+               اجازه می‌دهیم صفحه عادی Scroll شود.
+            */
+
+            if (
+                Math.abs(deltaY) >
+                Math.abs(deltaX)
+            ) {
+
+                carouselIsDragging = false;
+
+                bestCarousel.style.transition = "";
+
+            }
+
+        },
+        {
+            passive: true
         }
+    );
 
-        /*
-           Swipe RIGHT
-           -> previous cards
-        */
 
-        if (deltaX > swipeThreshold) {
+    bestCarousel.addEventListener(
+        "touchend",
+        () => {
 
-            moveCarousel(-1);
+            if (!carouselIsDragging) return;
 
-            return;
+
+            carouselIsDragging = false;
+
+
+            const deltaX =
+                carouselTouchCurrentX -
+                carouselTouchStartX;
+
+
+            const swipeThreshold = 50;
+
+
+            bestCarousel.style.transition = "";
+
+
+            if (
+                deltaX <
+                -swipeThreshold
+            ) {
+
+                moveCarousel(1);
+
+                return;
+
+            }
+
+
+            if (
+                deltaX >
+                swipeThreshold
+            ) {
+
+                moveCarousel(-1);
+
+                return;
+
+            }
+
+
+            layoutCarousel();
+
+        },
+        {
+            passive: true
         }
-
-        /*
-           Small movement:
-           return to normal position.
-        */
-
-        layoutCarousel();
-
-    },
-    {
-        passive: true
-    }
-);
+    );
 
 
-/*
-   If touch is cancelled.
-*/
+    bestCarousel.addEventListener(
+        "touchcancel",
+        () => {
 
-bestCarousel.addEventListener(
-    "touchcancel",
-    () => {
+            carouselIsDragging = false;
 
-        carouselIsDragging = false;
+            bestCarousel.style.transition = "";
 
-        bestCarousel.style.transition =
-            "";
+            layoutCarousel();
 
-        layoutCarousel();
+        },
+        {
+            passive: true
+        }
+    );
 
-    },
-    {
-        passive: true
-    }
-);
+}
 
-
-/*
-   Resize
-*/
 
 window.addEventListener(
     "resize",
@@ -718,23 +972,56 @@ window.addEventListener(
 );
 
 
-/* =========================
+/* =========================================================
    DAILY RECOMMENDATION
-========================= */
+========================================================= */
+
+function getTodayKey() {
+
+    const now =
+        new Date();
+
+
+    const year =
+        now.getFullYear();
+
+
+    const month =
+        String(
+            now.getMonth() + 1
+        ).padStart(2, "0");
+
+
+    const day =
+        String(
+            now.getDate()
+        ).padStart(2, "0");
+
+
+    return `${year}-${month}-${day}`;
+}
+
 
 function getDailyMovie() {
 
-    if (!allMovies.length) return null;
+    if (!allMovies.length) {
+        return null;
+    }
+
 
     const today =
-        new Date()
-            .toISOString()
-            .slice(0, 10);
+        getTodayKey();
+
+
+    const storageKey =
+        "neonflix-daily-movie";
+
 
     const stored =
         localStorage.getItem(
-            "neonflix-daily-movie"
+            storageKey
         );
+
 
     if (stored) {
 
@@ -743,24 +1030,41 @@ function getDailyMovie() {
             const data =
                 JSON.parse(stored);
 
-            if (data.date === today) {
+
+            if (
+                data.date === today &&
+                data.id != null
+            ) {
 
                 const found =
                     allMovies.find(
                         (movie) =>
-                            movie.id === data.id
+                            String(movie.id) ===
+                            String(data.id)
                     );
 
-                if (found) return found;
+
+                if (found) {
+
+                    return found;
+
+                }
+
             }
 
         } catch {
-            // Select another movie.
+
+            localStorage.removeItem(
+                storageKey
+            );
+
         }
+
     }
 
-    // Deterministic random movie.
+
     let hash = 0;
+
 
     for (const char of today) {
 
@@ -769,74 +1073,114 @@ function getDailyMovie() {
                 hash * 31 +
                 char.charCodeAt(0)
             ) >>> 0;
+
     }
 
+
     const index =
-        hash % allMovies.length;
+        hash %
+        allMovies.length;
+
 
     const movie =
         allMovies[index];
 
-    localStorage.setItem(
-        "neonflix-daily-movie",
-        JSON.stringify({
-            date: today,
-            id: movie.id
-        })
-    );
+
+    try {
+
+        localStorage.setItem(
+            storageKey,
+            JSON.stringify({
+                date: today,
+                id: movie.id
+            })
+        );
+
+    } catch {
+        // Ignore storage errors.
+    }
+
 
     return movie;
 }
 
+
+/* =========================================================
+   DAILY RECOMMENDATION CARD
+========================================================= */
 
 function renderRecommendation() {
 
     const movie =
         getDailyMovie();
 
-    if (!movie) return;
+
+    if (!movie || !recommendedMovie) return;
+
 
     recommendedMovie.innerHTML =
         movieCard(movie);
 
+
     attachCardEvents(
         recommendedMovie
     );
+
 
     const recommendationButton =
         document.getElementById(
             "recommendationButton"
         );
 
+
     if (recommendationButton) {
 
         recommendationButton.onclick =
-            () => openModal(movie);
+            (event) => {
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                openModal(movie);
+
+            };
 
     }
+
 }
 
 
-/* =========================
+/* =========================================================
    PAGINATION
-========================= */
+========================================================= */
 
 const PAGE_SIZE = 10;
 
 
 function renderPage(page) {
 
-    currentPage = page;
+    currentPage =
+        page;
+
 
     const start =
-        (page - 1) *
+        (
+            page -
+            1
+        ) *
         PAGE_SIZE;
+
 
     const movies =
         allMovies.slice(
             start,
-            start + PAGE_SIZE
+            start +
+            PAGE_SIZE
         );
+
+
+    if (!allMoviesContainer) return;
+
 
     allMoviesContainer.innerHTML =
         movies.length
@@ -846,21 +1190,27 @@ function renderPage(page) {
                 .join("")
 
             : `
+
                 <div class="empty-state">
 
                     <strong>
                         No movies here
                     </strong>
 
+                    <br>
+
                     Try a different page
                     or search instead.
 
                 </div>
+
             `;
+
 
     attachCardEvents(
         allMoviesContainer
     );
+
 
     renderPagination();
 }
@@ -868,7 +1218,12 @@ function renderPage(page) {
 
 function renderPagination() {
 
-    pageNumbers.innerHTML = "";
+    if (!pageNumbers) return;
+
+
+    pageNumbers.innerHTML =
+        "";
+
 
     const totalPages =
         Math.max(
@@ -879,17 +1234,22 @@ function renderPagination() {
             )
         );
 
+
     const start =
         Math.max(
             1,
-            currentPage - 2
+            currentPage -
+            2
         );
+
 
     const end =
         Math.min(
             totalPages,
-            currentPage + 2
+            currentPage +
+            2
         );
+
 
     for (
         let page = start;
@@ -902,105 +1262,165 @@ function renderPagination() {
                 "button"
             );
 
+
         button.className =
             "page-number";
+
 
         button.type =
             "button";
 
+
         if (
-            page === currentPage
+            page ===
+            currentPage
         ) {
 
             button.classList.add(
                 "active"
             );
 
+
             button.setAttribute(
                 "aria-current",
                 "page"
             );
+
         }
+
 
         button.textContent =
             page;
 
-        button.onclick = () => {
 
-            renderPage(page);
+        button.onclick =
+            () => {
 
-            document
-                .getElementById(
-                    "allMoviesSection"
-                )
-                .scrollIntoView({
-                    behavior: "smooth"
-                });
+                renderPage(page);
 
-        };
+
+                const section =
+                    document.getElementById(
+                        "allMoviesSection"
+                    );
+
+
+                if (section) {
+
+                    section.scrollIntoView({
+                        behavior: "smooth"
+                    });
+
+                }
+
+            };
+
 
         pageNumbers.appendChild(
             button
         );
+
     }
 
-    prevPageBtn.disabled =
-        currentPage === 1;
 
-    nextPageBtn.disabled =
-        currentPage === totalPages;
+    if (prevPageBtn) {
+
+        prevPageBtn.disabled =
+            currentPage === 1;
+
+    }
+
+
+    if (nextPageBtn) {
+
+        nextPageBtn.disabled =
+            currentPage === totalPages;
+
+    }
+
 }
 
 
-prevPageBtn.onclick = () => {
+if (prevPageBtn) {
 
-    if (currentPage > 1) {
+    prevPageBtn.onclick =
+        () => {
 
-        renderPage(
-            currentPage - 1
-        );
+            if (
+                currentPage >
+                1
+            ) {
 
-    }
-};
+                renderPage(
+                    currentPage -
+                    1
+                );
 
+            }
 
-nextPageBtn.onclick = () => {
+        };
 
-    const totalPages =
-        Math.ceil(
-            allMovies.length /
-            PAGE_SIZE
-        );
-
-    if (
-        currentPage <
-        totalPages
-    ) {
-
-        renderPage(
-            currentPage + 1
-        );
-
-    }
-};
+}
 
 
-/* =========================
+if (nextPageBtn) {
+
+    nextPageBtn.onclick =
+        () => {
+
+            const totalPages =
+                Math.ceil(
+                    allMovies.length /
+                    PAGE_SIZE
+                );
+
+
+            if (
+                currentPage <
+                totalPages
+            ) {
+
+                renderPage(
+                    currentPage +
+                    1
+                );
+
+            }
+
+        };
+
+}
+
+
+/* =========================================================
    SEARCH
-========================= */
+========================================================= */
 
-searchInput.addEventListener(
-    "input",
-    handleSearch
-);
+if (searchInput) {
+
+    searchInput.addEventListener(
+        "input",
+        handleSearch
+    );
+
+}
 
 
 function handleSearch() {
+
+    if (
+        !searchInput ||
+        !searchResults
+    ) {
+        return;
+    }
+
 
     const query =
         searchInput.value
             .trim()
             .toLowerCase();
+
 
     if (!query) {
 
@@ -1008,15 +1428,21 @@ function handleSearch() {
             "active"
         );
 
-        searchResults.innerHTML = "";
+
+        searchResults.innerHTML =
+            "";
+
 
         searchInput.setAttribute(
             "aria-expanded",
             "false"
         );
 
+
         return;
+
     }
+
 
     const results =
         allMovies
@@ -1028,31 +1454,40 @@ function handleSearch() {
             )
             .slice(0, 8);
 
+
     if (!results.length) {
 
         searchResults.innerHTML =
             `
+
                 <div class="search-empty">
                     No movies found
                 </div>
+
             `;
+
 
         searchResults.classList.add(
             "active"
         );
+
 
         searchInput.setAttribute(
             "aria-expanded",
             "true"
         );
 
+
         return;
+
     }
+
 
     searchResults.innerHTML =
         results
             .map(
                 (movie) => `
+
                     <div
                         class="search-result"
                         data-movie-id="${movie.id}"
@@ -1064,7 +1499,10 @@ function handleSearch() {
                             src="${imageURL(movie.poster)}"
                             alt=""
                             loading="lazy"
-                            onerror="this.style.visibility='hidden'"
+                            referrerpolicy="no-referrer"
+                            onerror="
+                                this.style.visibility='hidden'
+                            "
                         >
 
                         <div class="search-result-info">
@@ -1080,13 +1518,16 @@ function handleSearch() {
                         </div>
 
                     </div>
+
                 `
             )
             .join("");
 
+
     searchResults.classList.add(
         "active"
     );
+
 
     searchInput.setAttribute(
         "aria-expanded",
@@ -1098,106 +1539,122 @@ function handleSearch() {
         .querySelectorAll(
             ".search-result"
         )
-        .forEach((element) => {
+        .forEach(
+            (element) => {
 
-            const openResult = () => {
+                const openResult =
+                    () => {
 
-                const id =
-                    Number(
-                        element.dataset.movieId
-                    );
-
-                const movie =
-                    allMovies.find(
-                        (item) =>
-                            item.id === id
-                    );
-
-                if (movie) {
-                    openModal(movie);
-                }
-
-                closeMobileSearch();
-
-                searchInput.value = "";
-
-                searchResults.classList.remove(
-                    "active"
-                );
-
-            };
+                        const id =
+                            Number(
+                                element.dataset.movieId
+                            );
 
 
-            element.onclick =
-                openResult;
+                        const movie =
+                            allMovies.find(
+                                (item) =>
+                                    item.id ===
+                                    id
+                            );
 
 
-            element.onkeydown =
-                (event) => {
+                        if (movie) {
 
-                    if (
-                        event.key ===
-                        "Enter"
-                    ) {
+                            openModal(movie);
 
-                        openResult();
+                        }
 
-                    }
 
-                };
+                        closeMobileSearch();
 
-        });
+
+                        searchInput.value =
+                            "";
+
+
+                        searchResults.classList.remove(
+                            "active"
+                        );
+
+
+                        searchInput.setAttribute(
+                            "aria-expanded",
+                            "false"
+                        );
+
+                    };
+
+
+                element.onclick =
+                    openResult;
+
+
+                element.onkeydown =
+                    (event) => {
+
+                        if (
+                            event.key ===
+                            "Enter"
+                        ) {
+
+                            openResult();
+
+                        }
+
+                    };
+
+            }
+        );
+
 }
 
 
-/* =========================
-   CLOSE SEARCH OUTSIDE
-========================= */
-
-/*
-   Important:
-
-   pointerdown works for both:
-   - mouse click
-   - mobile touch
-
-   If the user touches/clicks outside
-   the search wrapper, the search closes.
-*/
+/* =========================================================
+   SEARCH OUTSIDE CLICK
+========================================================= */
 
 document.addEventListener(
     "pointerdown",
     (event) => {
 
         if (
-            !searchWrapper.contains(
+            !searchWrapper ||
+            searchWrapper.contains(
                 event.target
             )
         ) {
+            return;
+        }
+
+
+        if (searchResults) {
 
             searchResults.classList.remove(
                 "active"
             );
+
+        }
+
+
+        if (searchInput) {
 
             searchInput.setAttribute(
                 "aria-expanded",
                 "false"
             );
 
-            /*
-               If mobile search is open,
-               close the entire mobile search.
-            */
+        }
 
-            if (
-                searchWrapper.classList.contains(
-                    "mobile-open"
-                )
-            ) {
 
-                closeMobileSearch();
+        if (
+            searchWrapper &&
+            searchWrapper.classList.contains(
+                "mobile-open"
+            )
+        ) {
 
-            }
+            closeMobileSearch();
 
         }
 
@@ -1205,69 +1662,161 @@ document.addEventListener(
 );
 
 
-/* =========================
+/* =========================================================
    MOBILE SEARCH
-========================= */
+========================================================= */
 
-mobileSearchButton.onclick = () => {
+if (mobileSearchButton) {
 
-    searchWrapper.classList.add(
-        "mobile-open"
-    );
+    mobileSearchButton.onclick =
+        () => {
 
-    mobileSearchButton.style.display =
-        "none";
-
-    setTimeout(() => {
-
-        searchInput.focus();
-
-    }, 100);
-
-};
+            if (!searchWrapper) return;
 
 
-mobileSearchClose.onclick =
-    closeMobileSearch;
+            searchWrapper.classList.add(
+                "mobile-open"
+            );
+
+
+            mobileSearchButton.style.display =
+                "none";
+
+
+            setTimeout(
+                () => {
+
+                    if (searchInput) {
+                        searchInput.focus();
+                    }
+
+                },
+                100
+            );
+
+        };
+
+}
+
+
+if (mobileSearchClose) {
+
+    mobileSearchClose.onclick =
+        closeMobileSearch;
+
+}
 
 
 function closeMobileSearch() {
+
+    if (!searchWrapper) return;
+
 
     searchWrapper.classList.remove(
         "mobile-open"
     );
 
-    mobileSearchButton.style.display =
-        "";
 
-    searchInput.value = "";
+    if (mobileSearchButton) {
 
-    searchResults.classList.remove(
-        "active"
-    );
+        mobileSearchButton.style.display =
+            "";
 
-    searchInput.setAttribute(
-        "aria-expanded",
-        "false"
-    );
+    }
+
+
+    if (searchInput) {
+
+        searchInput.value =
+            "";
+
+    }
+
+
+    if (searchResults) {
+
+        searchResults.classList.remove(
+            "active"
+        );
+
+
+        searchResults.innerHTML =
+            "";
+
+    }
+
+
+    if (searchInput) {
+
+        searchInput.setAttribute(
+            "aria-expanded",
+            "false"
+        );
+
+    }
+
 }
 
 
-/* =========================
+/* =========================================================
    MODAL
-========================= */
+========================================================= */
 
 function openModal(movie) {
 
+    if (
+        !movie ||
+        !modal ||
+        !modalBody
+    ) {
+        return;
+    }
+
+
     const genres =
         Array.isArray(movie.genres)
-            ? movie.genres
+            ? movie.genres.filter(Boolean)
             : [];
+
 
     const images =
         Array.isArray(movie.images)
-            ? movie.images.filter(Boolean)
+            ? movie.images.filter(
+                (image) =>
+                    typeof image === "string" &&
+                    image.trim() !== ""
+            )
             : [];
+
+
+    const screenshotsHTML =
+        images.length
+
+            ? `
+
+                <div class="screenshots">
+
+                    ${images
+                        .map(
+                            (image) => `
+
+                                <img
+                                    src="${imageURL(image)}"
+                                    alt="${escapeHTML(movie.title)} screenshot"
+                                    loading="lazy"
+                                    referrerpolicy="no-referrer"
+                                    class="screenshot-image"
+                                >
+
+                            `
+                        )
+                        .join("")}
+
+                </div>
+
+            `
+
+            : "";
 
 
     modalBody.innerHTML = `
@@ -1278,6 +1827,7 @@ function openModal(movie) {
                 movie.poster
 
                     ? `
+
                         <img
                             class="modal-poster"
                             src="${imageURL(movie.poster)}"
@@ -1285,6 +1835,7 @@ function openModal(movie) {
                             referrerpolicy="no-referrer"
                             onerror="this.remove()"
                         >
+
                     `
 
                     : ""
@@ -1296,6 +1847,7 @@ function openModal(movie) {
                 <span class="section-kicker">
                     Movie Details
                 </span>
+
 
                 <h2 id="modalTitleSlot">
                     ${escapeHTML(movie.title)}
@@ -1311,12 +1863,14 @@ function openModal(movie) {
                         </strong>
                     </span>
 
+
                     <span>
                         ${escapeHTML(
                             movie.year ||
                             "Unknown"
                         )}
                     </span>
+
 
                     <span>
                         ${escapeHTML(
@@ -1332,20 +1886,23 @@ function openModal(movie) {
                     genres.length
 
                         ? `
+
                             <div class="genre-list">
 
                                 ${genres
                                     .map(
-                                        (genre) =>
-                                            `
-                                                <span class="genre">
-                                                    ${escapeHTML(genre)}
-                                                </span>
-                                            `
+                                        (genre) => `
+
+                                            <span class="genre">
+                                                ${escapeHTML(genre)}
+                                            </span>
+
+                                        `
                                     )
                                     .join("")}
 
                             </div>
+
                         `
 
                         : ""
@@ -1367,32 +1924,7 @@ function openModal(movie) {
         </div>
 
 
-        ${
-            images.length
-
-                ? `
-                    <div class="screenshots">
-
-                        ${images
-                            .map(
-                                (image) =>
-                                    `
-                                        <img
-                                            src="${imageURL(image)}"
-                                            alt="${escapeHTML(movie.title)} screenshot"
-                                            loading="lazy"
-                                            class="screenshot-image"
-                                            onerror="this.remove()"
-                                        >
-                                    `
-                            )
-                            .join("")}
-
-                    </div>
-                `
-
-                : ""
-        }
+        ${screenshotsHTML}
 
     `;
 
@@ -1401,40 +1933,84 @@ function openModal(movie) {
         "active"
     );
 
+
     document.body.style.overflow =
         "hidden";
 
-    modalClose.focus();
+
+    if (modalClose) {
+
+        modalClose.focus();
+
+    }
 
 
     modal
         .querySelectorAll(
             ".screenshot-image"
         )
-        .forEach((img) => {
+        .forEach(
+            (img) => {
 
-            img.onclick = () => {
+                img.addEventListener(
+                    "click",
+                    () => {
 
-                openFullscreenImage(
-                    img.src
+                        openFullscreenImage(
+                            img.src
+                        );
+
+                    }
                 );
 
-            };
 
-        });
+                img.addEventListener(
+                    "error",
+                    () => {
+
+                        img.remove();
+
+
+                        const screenshotContainer =
+                            modal.querySelector(
+                                ".screenshots"
+                            );
+
+
+                        if (
+                            screenshotContainer &&
+                            !screenshotContainer.querySelector(
+                                ".screenshot-image"
+                            )
+                        ) {
+
+                            screenshotContainer.remove();
+
+                        }
+
+                    }
+                );
+
+            }
+        );
+
 }
 
 
-/* =========================
+/* =========================================================
    FULLSCREEN IMAGE
-========================= */
+========================================================= */
 
 function openFullscreenImage(src) {
+
+    if (!src) return;
+
 
     const viewer =
         document.createElement(
             "div"
         );
+
 
     viewer.className =
         "fullscreen-viewer";
@@ -1445,11 +2021,15 @@ function openFullscreenImage(src) {
             "img"
         );
 
+
     image.src =
         src;
 
     image.alt =
         "";
+
+    image.referrerPolicy =
+        "no-referrer";
 
 
     viewer.appendChild(
@@ -1457,23 +2037,40 @@ function openFullscreenImage(src) {
     );
 
 
-    viewer.onclick = () => {
-        viewer.remove();
-    };
-
-
     document.body.appendChild(
         viewer
     );
 
 
-    requestAnimationFrame(() => {
+    requestAnimationFrame(
+        () => {
 
-        viewer.classList.add(
-            "active"
-        );
+            viewer.classList.add(
+                "active"
+            );
 
-    });
+        }
+    );
+
+
+    const closeViewer =
+        () => {
+
+            viewer.remove();
+
+
+            document.removeEventListener(
+                "keydown",
+                escHandler
+            );
+
+        };
+
+
+    viewer.addEventListener(
+        "click",
+        closeViewer
+    );
 
 
     const escHandler =
@@ -1484,12 +2081,7 @@ function openFullscreenImage(src) {
                 "Escape"
             ) {
 
-                viewer.remove();
-
-                document.removeEventListener(
-                    "keydown",
-                    escHandler
-                );
+                closeViewer();
 
             }
 
@@ -1500,32 +2092,43 @@ function openFullscreenImage(src) {
         "keydown",
         escHandler
     );
+
 }
 
 
-/* =========================
+/* =========================================================
    CLOSE MODAL
-========================= */
+========================================================= */
 
 function closeModal() {
+
+    if (!modal) return;
+
 
     modal.classList.remove(
         "active"
     );
 
+
     document.body.style.overflow =
         "";
+
 }
 
 
-modalClose.onclick =
-    closeModal;
+if (modalClose) {
+
+    modalClose.onclick =
+        closeModal;
+
+}
 
 
 const modalBackdrop =
     document.querySelector(
         ".modal-backdrop"
     );
+
 
 if (modalBackdrop) {
 
@@ -1541,6 +2144,7 @@ document.addEventListener(
 
         if (
             event.key === "Escape" &&
+            modal &&
             modal.classList.contains(
                 "active"
             )
@@ -1554,69 +2158,76 @@ document.addEventListener(
 );
 
 
-/* =========================
+/* =========================================================
    CARD EVENTS
-========================= */
+========================================================= */
 
-function attachCardEvents(
-    container
-) {
+function attachCardEvents(container) {
+
+    if (!container) return;
+
 
     container
         .querySelectorAll(
             ".movie-card"
         )
-        .forEach((card) => {
+        .forEach(
+            (card) => {
 
-            const openCard = () => {
-
-                const id =
-                    Number(
-                        card.dataset.movieId
-                    );
-
-                const movie =
-                    allMovies.find(
-                        (item) =>
-                            item.id === id
-                    );
-
-                if (movie) {
-                    openModal(movie);
-                }
-
-            };
+                card.onclick =
+                    openCard;
 
 
-            card.onclick =
-                openCard;
+                card.onkeydown =
+                    (event) => {
+
+                        if (
+                            event.key === "Enter" ||
+                            event.key === " "
+                        ) {
+
+                            event.preventDefault();
+
+                            openCard();
+
+                        }
+
+                    };
 
 
-            card.onkeydown =
-                (event) => {
+                function openCard() {
 
-                    if (
-                        event.key ===
-                            "Enter" ||
-                        event.key ===
-                            " "
-                    ) {
+                    const id =
+                        Number(
+                            card.dataset.movieId
+                        );
 
-                        event.preventDefault();
 
-                        openCard();
+                    const movie =
+                        allMovies.find(
+                            (item) =>
+                                Number(item.id) ===
+                                id
+                        );
+
+
+                    if (movie) {
+
+                        openModal(movie);
 
                     }
 
-                };
+                }
 
-        });
+            }
+        );
+
 }
 
 
-/* =========================
-   MOUSE FOLLOWING GLOW
-========================= */
+/* =========================================================
+   MOUSE FOLLOWING NEON GLOW
+========================================================= */
 
 document.addEventListener(
     "pointermove",
@@ -1627,7 +2238,9 @@ document.addEventListener(
                 ".glow-card"
             );
 
+
         if (!card) return;
+
 
         const rect =
             card.getBoundingClientRect();
@@ -1648,9 +2261,9 @@ document.addEventListener(
 );
 
 
-/* =========================
+/* =========================================================
    AMBIENT PAGE GLOW
-========================= */
+========================================================= */
 
 document.addEventListener(
     "pointermove",
@@ -1661,6 +2274,7 @@ document.addEventListener(
             `${event.clientX}px`
         );
 
+
         document.documentElement.style.setProperty(
             "--my",
             `${event.clientY}px`
@@ -1670,9 +2284,9 @@ document.addEventListener(
 );
 
 
-/* =========================
+/* =========================================================
    BROWSE BUTTON
-========================= */
+========================================================= */
 
 const browseButton =
     document.getElementById(
@@ -1682,33 +2296,83 @@ const browseButton =
 
 if (browseButton) {
 
-    browseButton.onclick = () => {
+    browseButton.onclick =
+        () => {
 
-        document
-            .getElementById(
-                "allMoviesSection"
-            )
-            .scrollIntoView({
-                behavior: "smooth"
-            });
+            const section =
+                document.getElementById(
+                    "allMoviesSection"
+                );
 
-    };
+
+            if (section) {
+
+                section.scrollIntoView({
+                    behavior: "smooth"
+                });
+
+            }
+
+        };
 
 }
 
 
-/* =========================
+/* =========================================================
    START
-========================= */
+========================================================= */
 
-loadMovies().catch(
-    (error) => {
+async function startApp() {
+
+    try {
+
+        const success =
+            await loadMovies();
+
+
+        if (success) {
+
+            /*
+               همه محتوا Render شده.
+               حالا Loader را محو کن.
+            */
+            hideLoader();
+
+        } else {
+
+            /*
+               در صورت خطا هم صفحه قفل نماند.
+            */
+            setTimeout(
+                hideLoader,
+                1500
+            );
+
+        }
+
+    } catch (error) {
 
         console.error(
+            "CineVerse startup error:",
             error
         );
 
+
         showLoadError();
 
+
+        /*
+           حتی در صورت Error هم
+           کاربر نباید تا ابد داخل Loader زندانی شود.
+        */
+        setTimeout(
+            hideLoader,
+            1500
+        );
+
     }
-);
+
+}
+
+
+startApp();
