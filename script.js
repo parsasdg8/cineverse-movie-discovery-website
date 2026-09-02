@@ -1,4 +1,4 @@
-const API = "/api/movies?page=";
+const API = "https://moviesapi.ir/api/v1/movies?page=";
 const TOTAL_PAGES = 25;
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
 
